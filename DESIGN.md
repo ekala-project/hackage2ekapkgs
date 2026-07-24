@@ -137,9 +137,25 @@ directory. Since we decouple from nixpkgs, config file paths are now
 absolute (or relative to cwd). This makes it straightforward to keep
 configuration in the downstream `haskell-packages` repository.
 
+### PostProcess hook cleanup
+
+Upstream PostProcess.hs contains per-package fixup hooks. Two categories
+of hooks reference nixpkgs-specific nested scopes that don't exist in
+corepkgs:
+
+- `pkgs.qt5.qtbase` (qtah-cpp-qt5, qtah-qt5)
+- `pkgs.gst_all_1.*` (gi-gst, gi-gstaudio, gi-gstbase, gi-gstvideo)
+
+These hooks were removed. All other hooks use flat `pkgs.*` references
+(which are resolved by `derivation-attr-paths.nix` against the target
+package set) or `self.*` references (Haskell-to-Haskell deps), and
+work unchanged.
+
+Hooks that use `lib.getDev`/`lib.getLib` (freenect, HFuse, libxml,
+gi-cairo) are retained — corepkgs inherits these functions from
+nix-lib.
+
 ## Future work
 
 - Incremental regeneration: only regenerate packages whose Cabal files
   changed since the last run.
-- Drop PostProcess hooks that reference nixpkgs-only packages.
-- Add a Nix flake for building the tool itself.
