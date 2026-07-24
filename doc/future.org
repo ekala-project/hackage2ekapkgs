@@ -1,0 +1,60 @@
+#+TITLE: The Future of Haskell Packaging in Nix
+
+* DONE Use Function Application To Escape Override Hell
+* DONE Guarantee Consistent Builds and Obsolete =overrideScope=
+* DONE Map Cabal Files To Nix Without Information Loss
+* TODO Implement Proper Dependency Resolution
+* TODO Develop Intelligent Policies for Post-processing and Patching
+* TODO Users Need a Configuration Mechanism That Is Both Simpler and More Powerful
+* TODO Deal With Infinite Recursions in Test Dependencies
+* DONE Set up a Sufficiently Powerful Build Farm
+* TODO Define and Publish Processes for Managing the Package Set(s)
+* DONE Publish All of Hackage
+
+  We publish 10,745 package versions out of 60,504 available ones, i.e. 18% of
+  Hackage. Those packages are selected as follows: we distribute the latest
+  version of every package --- 8,764 builds --- plus an additional 1,981 older
+  versions that are required by the various LTS Haskell and Stackage Nightly
+  package sets we support.
+
+* TODO Generate Differential Build Expressions
+* TODO Generate Build Expressions for Hydra
+* TODO Add Support for Mega Repositories to =cabal2nix=
+* TODO Support Building With =stack=
+* TODO Support multi-output derivations
+
+  Put static, shared, and profiled library variants into separate output so
+  that we can build everything without forcing users to download all that stuff
+  if they just want the regular build.
+* TODO Write a =ghcWithPackages= combinator to create conglomerate workspaces
+
+  Thomas Strobel <thomas@strobel.eu> suggested this:
+
+  I want to hack on a set of libraries, say transformers and mtl, and I'd like
+  to do that in an environment that contains criterion, QuickCheck, etc. So I
+  run
+
+    stackWithPackages (hp: {
+      sources = with hp; [transformers mtl];
+      env = with hp; [criterion QuickCheck];
+    })
+
+  This should create a conglomerate workspace / nix-shell environment that
+  contains the source code for transformers and lens in subdirectories plus a
+  stack.yaml file that builds them both:
+
+    stack.yaml
+    mtl / ...
+    transformers ...
+
+  The environment would contain a GHC with criterion and QuickCheck registered
+  in appropriate LTS versions so that the stack builds don't compile anything
+  except the packages I'm hacking on.
+
+  The value of env could possibly be auto-determined from the dependencies of
+  transformers and mtl.
+* TODO Solve the too-eager evaluation of meta.broken
+
+  We'd like to mark builds that are known to fail with `meta.broken = true`,
+  but this is impractical because users have no way to override that setting if
+  they discover that the package has been fixed in a new version.

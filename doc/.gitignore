@@ -1,0 +1,14 @@
+# ignored files in the doc hierarchy
+
+/*.aux
+/*.csv
+/*.eps
+/*.html
+/*.json
+/*.log
+/*.out
+/*.pdf
+/*~
+/.RData
+/.Rhistory
+/_build/*
