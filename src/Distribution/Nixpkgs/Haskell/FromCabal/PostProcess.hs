@@ -98,10 +98,7 @@ hooks =
   , ("gi-gdk", set runHaddock True )
   , ("gi-gio", set runHaddock True )
   , ("gi-glib", set runHaddock True )
-  , ("gi-gst", giGstLibOverrides "gstreamer")               -- https://github.com/haskell-gi/haskell-gi/issues/36
-  , ("gi-gstaudio", giGstLibOverrides "gst-plugins-base")   -- https://github.com/haskell-gi/haskell-gi/issues/36
-  , ("gi-gstbase", giGstLibOverrides "gst-plugins-base")    -- https://github.com/haskell-gi/haskell-gi/issues/36
-  , ("gi-gstvideo", giGstLibOverrides "gst-plugins-base")   -- https://github.com/haskell-gi/haskell-gi/issues/36
+  -- gi-gst* hooks removed: they reference pkgs.gst_all_1.* which doesn't exist in corepkgs
   , ("gi-gtk", set runHaddock True )
   , ("gi-pango", giCairoPhaseOverrides)                     -- https://github.com/haskell-gi/haskell-gi/issues/36
   , ("gi-pango", set runHaddock True )
@@ -148,8 +145,7 @@ hooks =
   , ("purescript", set doCheck False) -- test suite doesn't cope with Nix build env
   , ("proto-lens-protobuf-types", set (libraryDepends . tool . contains (pkg "protobuf")) True)
   , ("proto-lens-protoc", set (libraryDepends . tool . contains (pkg "protobuf")) True)
-  , ("qtah-cpp-qt5", set (libraryDepends . system . contains (bind "pkgs.qt5.qtbase")) True)
-  , ("qtah-qt5", set (libraryDepends . tool . contains (bind "pkgs.qt5.qtbase")) True)
+  -- qtah-* hooks removed: they reference pkgs.qt5.qtbase which doesn't exist in corepkgs
   , ("readline", over (libraryDepends . system) (Set.union (pkgs ["readline", "ncurses"])))
   , ("req", set doCheck False)  -- test suite requires network access
   , ("rest-rewrite", over (testDepends . system) (Set.union (pkgs ["graphviz", "z3"])))
@@ -293,11 +289,6 @@ stackOverrides = unlines
   , "  $exe --bash-completion-script $exe >$out/share/bash-completion/completions/stack"
   , "'';"
   ]
-
--- Replace a binding for <package> to one to pkgs.gst_all_1.<package>
-giGstLibOverrides :: String -> Derivation -> Derivation
-giGstLibOverrides package
-  = over (libraryDepends . pkgconfig) (replace (nullBinding (ident # package)) (binding # (ident # package, path # ["pkgs","gst_all_1", ident # package])))
 
 giCairoPhaseOverrides :: Derivation -> Derivation
 giCairoPhaseOverrides = over phaseOverrides (++txt)
