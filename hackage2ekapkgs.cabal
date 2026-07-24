@@ -1,0 +1,98 @@
+cabal-version:      2.2
+name:               hackage2ekapkgs
+version:            0.1.0.0
+synopsis:           Generate per-package Nix expressions from Hackage for ekapkgs
+description:
+  Fork of hackage2nix from the cabal2nix project, adapted to generate
+  per-package Nix files targeting the ekapkgs (corepkgs) package set
+  instead of nixpkgs.
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Peter Simons <simons@cryp.to>
+maintainer:         Jonathan Ringer <jonringer117@gmail.com>
+category:           Distribution, Nix
+build-type:         Simple
+data-files:         derivation-attr-paths.nix
+
+source-repository head
+  type:     git
+  location: https://github.com/ekala-project/hackage2ekapkgs
+
+library
+  exposed-modules:    Cabal2nix
+                      Distribution.Nixpkgs.Color
+                      Distribution.Nixpkgs.Fetch
+                      Distribution.Nixpkgs.Hashes
+                      Distribution.Nixpkgs.Haskell
+                      Distribution.Nixpkgs.Haskell.BuildInfo
+                      Distribution.Nixpkgs.Haskell.Constraint
+                      Distribution.Nixpkgs.Haskell.Derivation
+                      Distribution.Nixpkgs.Haskell.FromCabal
+                      Distribution.Nixpkgs.Haskell.FromCabal.Configuration
+                      Distribution.Nixpkgs.Haskell.FromCabal.Flags
+                      Distribution.Nixpkgs.Haskell.FromCabal.License
+                      Distribution.Nixpkgs.Haskell.FromCabal.Name
+                      Distribution.Nixpkgs.Haskell.FromCabal.Normalize
+                      Distribution.Nixpkgs.Haskell.FromCabal.PostProcess
+                      Distribution.Nixpkgs.Haskell.Hackage
+                      Distribution.Nixpkgs.Haskell.OrphanInstances
+                      Distribution.Nixpkgs.Haskell.PackageSourceSpec
+                      Distribution.Nixpkgs.Haskell.Platform
+                      Distribution.Nixpkgs.License
+                      Distribution.Nixpkgs.Meta
+                      Distribution.Nixpkgs.PackageMap
+                      Language.Nix
+                      Language.Nix.Binding
+                      Language.Nix.Identifier
+                      Language.Nix.Path
+                      Language.Nix.PrettyPrinting
+  autogen-modules:    Paths_hackage2ekapkgs
+  other-modules:      Paths_hackage2ekapkgs
+  hs-source-dirs:     src
+  build-depends:      base                 > 4.11 && < 5
+                    , Cabal                >= 3.0 && < 3.18
+                    , QuickCheck
+                    , aeson                > 1
+                    , ansi-terminal
+                    , bytestring
+                    , containers           >= 0.5.9
+                    , deepseq              >= 1.4
+                    , directory
+                    , filepath
+                    , hackage-db           >= 2.0.1
+                    , hopenssl             >= 2
+                    , hpack                >= 0.29.6
+                    , lens
+                    , optparse-applicative
+                    , parsec-class
+                    , pretty               >= 1.1.2
+                    , prettyprinter
+                    , process
+                    , split
+                    , text
+                    , time
+                    , transformers
+                    , yaml
+  default-language:   Haskell2010
+
+executable hackage2ekapkgs
+  main-is:            Main.hs
+  other-modules:      HackageGit
+  hs-source-dirs:     hackage2ekapkgs
+  build-depends:      base                 < 5
+                    , Cabal
+                    , aeson
+                    , bytestring
+                    , hackage2ekapkgs
+                    , containers
+                    , directory
+                    , filepath
+                    , hopenssl             >= 2
+                    , lens
+                    , monad-par
+                    , monad-par-extras
+                    , mtl
+                    , optparse-applicative
+                    , pretty               >= 1.1.2
+  default-language:   Haskell2010
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-maxN16
