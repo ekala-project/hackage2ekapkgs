@@ -52,6 +52,7 @@ data CLI = CLI
   { hackageRepository :: FilePath
   , preferredVersionsFile :: Maybe FilePath
   , pkgsPath :: FilePath
+  , pkgsArgs :: Maybe String
   , outputDir :: FilePath
   , configFiles :: NonEmpty FilePath
   , targetPlatform :: Platform
@@ -66,6 +67,7 @@ main = do
         <$> strOption (long "hackage" <> help "path to Hackage git repository" <> value "hackage" <> showDefaultWith id <> metavar "PATH")
         <*> optional (strOption (long "preferred-versions" <> help "path to Hackage preferred-versions file" <> value "hackage/preferred-versions" <> showDefault <> metavar "PATH"))
         <*> strOption (long "pkgs-path" <> help "path to package set for system dependency resolution" <> value "." <> showDefaultWith id <> metavar "PATH")
+        <*> optional (strOption (long "pkgs-args" <> help "Nix attribute set passed when importing --pkgs-path, e.g. '{ config.aliases.nixpkgs = false; }'" <> metavar "EXPR"))
         <*> strOption (long "output-dir" <> help "output directory for generated per-package .nix files" <> value "hackage" <> showDefaultWith id <> metavar "PATH")
         <*> some1 (strOption (long "config" <> help "path to configuration file" <> metavar "PATH"))
         <*> option (maybeReader parsePlatformFromSystemLenient) (long "platform" <> help "target platform to generate package set for" <> value (Platform X86_64 Linux) <> showDefaultWith display <> metavar "PLATFORM")
@@ -82,7 +84,7 @@ main = do
   CLI {..} <- execParser pinfo
 
   config <- sconcat <$> mapM readConfiguration configFiles
-  pkgMap <- readNixpkgPackageMap pkgsPath Nothing
+  pkgMap <- readNixpkgPackageMap pkgsPath pkgsArgs
   preferredVersions <- readPreferredVersions (fromMaybe (hackageRepository </> "preferred-versions") preferredVersionsFile)
   let fixup = Map.delete "acme-everything"
               . over (at "hermes") (fmap (set (contains "1.3.4.3") False))
@@ -122,6 +124,10 @@ main = do
         | Just v <- Map.lookup name corePackageSet                = v `withinRange` vrange
         | Just v <- Map.lookup name generatedDefaultPackageSet    = v `withinRange` vrange
         | otherwise                                               = False
+
+      -- Whether @pkgs.<i>@ is a derivation in the target package set.
+      isTopLevelPackage :: Identifier -> Bool
+      isTopLevelPackage i = maybe False (Set.member (path # [i])) (Map.lookup i pkgMap)
 
       nixpkgsResolver :: Identifier -> Maybe Binding
       nixpkgsResolver = resolve (Map.map (Set.map (over path ("pkgs":))) pkgMap)
@@ -163,9 +169,19 @@ main = do
                   & metaSection.broken ||~ isBroken
                   & metaSection.maintainers .~ Map.findWithDefault Set.empty name globalPackageMaintainers
                   & metaSection.homepage .~ ""
+                  & resolveSystemDependencies isTopLevelPackage (systemDependencyPaths config)
 
           overrides :: Doc
-          overrides = fcat $ punctuate space [ pPrint b <> semi | b <- Set.toList (view (dependencies . each) drv `Set.union` view extraFunctionArgs drv), not (isFromHackage b) ]
+          overrides = fcat $ punctuate space [ renderOverride b <> semi | b <- Set.toList (view (dependencies . each) drv `Set.union` view extraFunctionArgs drv), not (isFromHackage b) ]
+
+          -- Unresolved system dependencies are looked up lazily so that the
+          -- package works once a downstream package set provides them.
+          renderOverride :: Binding -> Doc
+          renderOverride b
+            | i `Set.member` view (metaSection . brokenIfMissing) drv
+            = pPrint i <+> equals <+> (text "pkgs." <> pPrint i) <+> text "or null"
+            | otherwise = pPrint b
+            where i = view localName b
 
           body :: String
           body = render $ nest 2 $
@@ -218,6 +234,50 @@ main = do
   writeFile (outputDir </> "default.nix") indexContent
 
   hPutStrLn stderr $ "Generated " ++ show (length pkgEntries) ++ " package files in " ++ outputDir
+
+-- | Apply explicit system dependency paths from the configuration, then
+--   record every system, pkg-config or tool dependency that is still
+--   unresolved in 'brokenIfMissing': bound to @null@ by the resolver, or
+--   referenced as @pkgs.<name>@ by a PostProcess hook (which bypasses the
+--   resolver) although the target package set has no such attribute.
+resolveSystemDependencies :: (Identifier -> Bool) -> Map Identifier Path -> Derivation -> Derivation
+resolveSystemDependencies isTopLevelPackage paths drv0 =
+    drv & metaSection . brokenIfMissing .~ missing
+  where
+    -- Rename every non-Hackage binding of a name, so that a name bound to
+    -- null in one dependency set (e.g. an unresolvable Haskell dependency)
+    -- and to a system library in another still yields a single binding.
+    drv = drv0 & over (dependencies . each) (Set.map rename)
+               & over extraFunctionArgs (Set.map rename)
+
+    rename :: Binding -> Binding
+    rename b | isFromHackage b = b
+    rename b = case Map.lookup (view localName b) paths of
+      Just p | view path p == [nullIdent] -> binding # (view localName b, p)
+             | otherwise -> binding # (view localName b, path # (ident # "pkgs" : view path p))
+      Nothing -> b
+
+    missing :: Set Identifier
+    missing = Set.fromList $
+      [ view localName b
+      | l <- [pkgconfig, system, tool]
+      , b <- Set.toList (foldMapOf (dependencies . l) id drv)
+      , view (reference . path) b == [nullIdent]
+      , not (view localName b `Map.member` paths)
+      ] ++
+      [ i
+      | b <- Set.toList (foldMapOf (dependencies . each) id drv `Set.union` view extraFunctionArgs drv)
+      , let i = view localName b
+      , view (reference . path) b == [pkgsIdent, i]
+      , not (i `Map.member` paths)
+      , not (isTopLevelPackage i)
+      ]
+
+    pkgsIdent :: Identifier
+    pkgsIdent = ident # "pkgs"
+
+    nullIdent :: Identifier
+    nullIdent = ident # "null"
 
 isFromHackage :: Binding -> Bool
 isFromHackage b = case view (reference . path) b of
