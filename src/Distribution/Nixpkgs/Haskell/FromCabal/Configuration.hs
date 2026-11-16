@@ -27,6 +27,7 @@ import Distribution.Nixpkgs.Meta
 import Distribution.Package
 import GHC.Generics ( Generic )
 import Language.Nix.Identifier
+import Language.Nix.Path
 
 data Configuration = Configuration
   {
@@ -64,6 +65,14 @@ data Configuration = Configuration
   -- also disable their meta.hydraPlatforms attribute to avoid cluttering our
   -- Hydra job with lots of failure messages.
   , brokenPackages :: [Constraint]
+
+  -- |Explicit attribute paths (relative to @pkgs@) for system dependencies,
+  -- keyed by the Nix name 'libNixName' produces. Used when the target package
+  -- set names a library differently, possibly in a nested attribute set
+  -- (e.g. @fftwFloat: fftw.float@). A @null@ value binds the dependency to
+  -- @null@ without marking the package broken, for libraries provided by the
+  -- toolchain (e.g. @util@ from libc).
+  , systemDependencyPaths :: Map Identifier Path
   }
   deriving (Show, Generic)
 
@@ -79,6 +88,7 @@ instance Semigroup Configuration where
                          , unsupportedPlatforms = unsupportedPlatforms l <> unsupportedPlatforms r
                          , dontDistributePackages = dontDistributePackages l <> dontDistributePackages r
                          , brokenPackages = brokenPackages l <> brokenPackages r
+                         , systemDependencyPaths = systemDependencyPaths l <> systemDependencyPaths r
                          }
 
 instance FromJSON Configuration where
@@ -92,11 +102,17 @@ instance FromJSON Configuration where
         <*> o .:? "unsupported-platforms" .!= mempty
         <*> o .:? "dont-distribute-packages" .!= mempty
         <*> o .:? "broken-packages" .!= mempty
+        <*> o .:? "system-dependency-paths" .!= mempty
   parseJSON _ = error "invalid Configuration"
 
 instance FromJSON Identifier where
   parseJSON (String s) = pure (review ident (T.unpack s))
   parseJSON s = fail ("parseJSON: " ++ show s ++ " is not a valid Nix identifier")
+
+instance FromJSON Path where
+  parseJSON (String s) = pure (review path [ review ident (T.unpack c) | c <- T.splitOn "." s ])
+  parseJSON Null = pure (review path [ review ident "null" ])
+  parseJSON s = fail ("parseJSON: " ++ show s ++ " is not a valid Nix attribute path")
 
 instance FromJSONKey Identifier where
   fromJSONKey = FromJSONKeyText parseKey

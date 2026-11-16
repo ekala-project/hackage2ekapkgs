@@ -14,6 +14,7 @@ module Distribution.Nixpkgs.Meta
     Meta, nullMeta
     -- ** Lenses for 'Meta'
   , homepage, description, license, platforms, badPlatforms, hydraPlatforms, mainProgram, maintainers, broken
+  , brokenIfMissing
     -- * Representation of Nixpkgs Platform Descriptions
   , NixpkgsPlatform (..)
   , nixpkgsPlatformFromString
@@ -269,6 +270,11 @@ data Meta = Meta
   -- ^ list of maintainers from @pkgs\/lib\/maintainers.nix@
   , _broken         :: Bool
   -- ^ set to @true@ if the build is known to fail
+  , _brokenIfMissing :: Set Identifier
+  -- ^ system dependencies that could not be resolved in the target package
+  --   set. Unless '_broken' is set, renders as
+  --   @broken = !(pkgs ? a) || !(pkgs ? b);@ so the package becomes
+  --   buildable once a downstream package set provides the dependency.
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -286,7 +292,10 @@ instance Pretty Meta where
     , maybe mempty (renderPlatforms "hydraPlatforms") _hydraPlatforms
     , maybe mempty (attr "mainProgram" . string) _mainProgram
     , listattrDoc "maintainers" mempty $ renderMaintainers _maintainers
-    , boolattr "broken" _broken _broken
+    , if _broken || Set.null _brokenIfMissing
+        then boolattr "broken" _broken _broken
+        else attr "broken" $ hsep $ punctuate (text " ||")
+               [ text "!(pkgs ?" <+> pPrint i <> text ")" | i <- Set.toList _brokenIfMissing ]
     ]
 
 -- | This function renders an Nix attribute binding suitable for use in
@@ -430,4 +439,5 @@ nullMeta = Meta
   , _mainProgram = error "undefined Meta.mainProgram"
   , _maintainers = error "undefined Meta.maintainers"
   , _broken = error "undefined Meta.broken"
+  , _brokenIfMissing = Set.empty
   }
